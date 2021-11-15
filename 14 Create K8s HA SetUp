@@ -1,0 +1,121 @@
+************* Install Kubernertes on Master Node *************
+
+1. Upgrade apt packages
+sudo apt-get update
+
+2. Install Docker Engine
+sudo apt-get install -y docker.io
+
+3. Install Support packages
+sudo apt-get install -y apt-transport-https curl
+
+4. Retrieve the key for the Kubernetes repo and add it to your key manager
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+
+5. Add the kubernetes repo to your system
+cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
+deb http://apt.kubernetes.io/ kubernetes-xenial main
+EOF
+
+6. Install the three pieces you’ll need, kubeadm, kubelet, and kubectl
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+
+7. Create the actual cluster
+kubeadm init --pod-network-cidr=192.168.0.0/16
+
+If the error below is throw, execute following instructions:
+---------------------------------------------------------------------------------------
+Error:
+[kubelet-check] The HTTP call equal to 'curl -sSL http://localhost:10248/healthz' failed with error: Get "http://localhost:10248/healthz": dial tcp 127.0.0.1:10248: connect: connection refused.
+
+Instructions:
+This worked for me:
+
+Create this file "daemon.json" in the directory "/etc/docker" and add the following
+
+echo '{ "exec-opts": ["native.cgroupdriver=systemd"] }' >> /etc/docker/daemon.json
+Restart your docker service:
+
+systemctl restart docker
+Reset kubeadm initializations: (confirm y/n question)
+
+kubeadm reset
+Initialize your network:
+
+kubeadm init --pod-network-cidr=192.168.0.0/16
+Note: Make steps 1 to 3 in both node droplets
+
+Source: https://gitanswer.com/kubernetes-v1-14-0-problem-it-seems-like-the-kubelet-isn-t-running-or-healthy-go-426259117
+---------------------------------------------------------------------------------------
+
+Note - Notedown the Command to join cluster
+---------------------------------------------------------------------------------------
+Your Kubernetes control-plane has initialized successfully!
+
+To start using your cluster, you need to run the following as a regular user:
+
+  mkdir -p $HOME/.kube
+  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+  sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+Alternatively, if you are the root user, you can run:
+
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+
+You should now deploy a pod network to the cluster.
+Run "kubectl apply -f [podnetwork].yaml" with one of the options listed at:
+  https://kubernetes.io/docs/concepts/cluster-administration/addons/
+
+Then you can join any number of worker nodes by running the following on each as root:
+
+kubeadm join 206.189.24.213:6443 --token sbimp4.4elnmxnto4ir5ppw \
+	--discovery-token-ca-cert-hash sha256:f28c08b75f9db1ce461ceedb346dedb6ec1f5a61c6a0172572adc18cee5d8434
+---------------------------------------------------------------------------------------
+
+
+8. Install the Calico network plugin
+kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+
+9. Untaint the master so that it will be available for scheduling workloads
+kubectl taint nodes --all node-role.kubernetes.io/master-
+
+10. Get Cluster Nodes
+kubectl get nodes
+
+
+
+************* Install & Configure Kubernertes Worker Node *************
+
+1. Upgrade apt packages
+sudo apt-get update
+
+2. Install Docker Engine
+sudo apt-get install -y docker.io
+
+3. Install Support packages
+sudo apt-get install -y apt-transport-https curl
+
+4. Retrieve the key for the Kubernetes repo and add it to your key manager
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+
+5. Add the kubernetes repo to your system
+cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
+deb http://apt.kubernetes.io/ kubernetes-xenial main
+EOF
+
+6. Install the three pieces you’ll need, kubeadm, kubelet, and kubectl
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+
+7. Join the Worker Nodes to the Cluster
+In the Control Plane Node, create the token and copy the kubeadm join command (NOTE:The join command can also be found in the output from kubeadm init command):
+kubeadm token create --print-join-command
+
+8. In both Worker Nodes, paste the kubeadm join command to join the cluster:
+sudo kubeadm join <join command from previous command>
+
+9. In the Control Plane Node, view cluster status (Note: You may have to wait a few moments to allow the cluster to become ready):
+kubectl get nodes
